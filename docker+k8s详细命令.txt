@@ -1,0 +1,394 @@
+1，docker images 列出镜像
+2，docker pull redis:version 拉取镜像
+3，docker search redis 搜索镜像
+4，docker rmi redis tomcat 删除一个或者多个镜像
+5，docker run -i -t --name=c1 centos /bin/bash 
+    -i 交互式 -t tty终端与统一交互  --name 给容器起一个名字
+     docker run -it --name c1 centos /bin/bash 
+exit 从容器中退出容器停止运行
+6，docker ps 查看正在运行的容器
+7，docker run -d --name c2 centos /bin/bash 创建守护式容器：但是这个容器马上会运行完成
+docker exec -it c2 /bin/bash 进入容器会报错
+
+-- docker ps -a 查看刚刚运行过的容器；名字不能重复否则无法创建  
+
+docker docker run -itd --name c3 centos /bin/bash
+docker exec -it c3 /bin/bash
+
+8，docker ps  
+     docker ps -a 查看历史运行过的
+     docker ps -l  查看最后一次运行的容器
+9，docker start c2  会重新起一次c2这个容器，但是刚刚并没有让它一直运行，所以会短暂结束
+     docker start c3    docker  restart c3  docker stop c3
+10，docker inspect c3 查看容器详细信息 ，容器ID 网络等信息
+docker inspect c3 -f='{{.NetworkSetting.IpAdresses}}' 查看容器网络ip地址
+docker inspect c3 -format='{{.NetworkSetting.IPAdress}}'
+11，docker rm c2 c3  删除容器，但是不能删除正在运行的容器
+docker rm `docker ps -a -q`  注意这不是单引号是波浪号键的符号 ，删除所有列出的容器
+12，docker logs c3 查看容器的日志
+13，docker cp 1.txt c1:/root  把当前宿主机1.txt文件拷贝到容器为c1的/root目录下
+       docker c1:/root/2.txt  /root 把容器中的文件拷贝到宿主机中
+14， docker run -itd  --name c2  -v  /opt:/usr/local/myhtml  centos /bin/bash
+      -v 就是把宿主机的目录挂载到容器中 上面把 /opt 目录挂载到 /usr/local/myhtml
+15， docker commit mycentos  mytomcat  把正在运行的容器mycentos制作成一个新的镜像 mytomcat
+16,   docker run -itd --name t1 -p 8888:8080 mytomcat /bin/bash 把制作的镜像运行起来
+        -p 端口映射 把宿主机8888端口映射成容器 8080端口
+       docker exec t1 /usr/local/tomcat/bin/startup.sh    启动容器的Tomcat
+17， docker save -o /root/tomcat.tar mytomcat  把镜像mytomcat打包成tomcat.tar
+        scp tomcat.tar 192.168.19.200:/root 目录下
+        docker  load -i /root/tomcat.tar 解压镜像到本地
+18， docker export -o  /root/t1.tar  t1  把容器进行打包
+        docker import /root/t1.tar t1:latest 把容器解压
+19, docker network inspect bridge  查看桥接网络所包含的容器
+     docker network ls 查看网络类型
+20，docker network create --driver bridge  isolated_nw  创建自定义网络，不过该网络的驱动类型只能为桥接
+21，docker run --network=isolated_nw -itd  --name=c3 busybox 创建c3容器并指定网络为新创建的网络
+22，docker network connect isolated_nw c2 为c2容器添加一个网络
+docker network disconnect isolated_nw c2  解除网络
+docker network rm isolated_nw 删除改网络
+
+23，docker attach c2 进入容器  crtl+q+p键退出容器
+-------
+docker swarm 命令
+
+1， docker swarm init --advertise-addr 192.168.200.162   把这台主机设置为管理节点
+会产生一个token 然后去每台工作节点执行
+docker swarm join --token xxxxxx  192.168.200.162:2237  注意每台主机的防火墙
+
+docker network ls 查看网络
+systemctl  stop firewalld 停止防火墙
+docker node ls 查看swarm 节点
+
+2， docker service create --replicas 1 --name hellword alpine ping docker.com 创建一个实例节点
+这里的ping 表示服务起来后运行的命令  --name 表示服务名
+
+3， docker service ls 查看服务实例
+
+4， docker service inspect hellword 查看服务的详细信息
+      docker service ps  hellword  查看该服务在那个节点上运行
+5， docker service scale hellword=5 把改服务扩从到5个去
+      docker service rm hellword  删除这个服务
+
+6，docker  network -d=overlay my-muti-host-network 创建一个新的网络（默认的网络连接为ingress）
+
+7, docker service create --network my-muti-host-network  --name myweb  -p 8080:80 \
+--replicas 2 nginx 创建两个nginx服务
+
+-----
+docker compose 服务编排工具查看github
+
+1，doker ui  
+   docker run -d -p 9000:9000 --privileged -v /var/run/docker.sock:/var/run/docker.sock uifd/ui-for-docker
+
+2， portainer
+   docker run -d -p 9001:9000 --privileged -v /var/run/docker.sock:/var/run/docker.sock portainer/portainer
+
+3, daoClod not free
+
+-----
+k8s
+
+1, 关闭swap 分区与selinux
+swapoff -a && sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab 
+setenforce 0 && sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+2，安装基础工具
+yum install -y conntrack ntpdate ntp ipvsadm jq iptables curl syssat libseccomp wget git net-tools vim
+
+3, 调整内核参数
+
+cat > kubernetes.conf <<EOF
+net.bridge.bridge-nf-call-iptables=1
+net.bridge.bridge-nf-call-ip6tables=1
+net.ipv4.ip_forward=1
+net.ipv4.tcp_tw_recycle=0
+vm.swappiness=0 
+vm.overcommit_memory=1
+vm.panic_on_oom=0
+fs.inotify.max_user_instances=8192
+fs.inotify.max_user_watches=1048576
+fs.file-max=52706963
+fs.nr_open=52706963
+net.ipv6.conf.all.disable_ipv6=1
+net.netfilter.nf_conntrack_max=2310720
+EOF
+
+cp kubernetes.conf /etc/sysctl.d/kubernetes.conf
+
+sysctl -p /etc/sysctl.d/kubernetes.conf
+
+4, 更改日志类型
+mkdir /var/log/journal
+mkdir /etc/systemd/journald.conf.d
+
+cat > /etc/systemd/journald.conf.d/99-prophet.conf <<EOF
+[Journal]
+Storage=persistent
+
+Compress=yes
+
+SynIntervalSec=5m
+RateLimitInterval=30s
+RateLimitBurst=1000
+
+SystemMaxFileSize=200M
+
+MaxRetentionSec=2week
+
+ForwardToSyslog=no
+EOF
+
+systemctl restart systemd-journald
+
+5, 升级内核4.x
+ rpm -Uvh http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
+ yum --enablerepo=elrepo-kernel install -y kernel-lt
+设为从新内核开机启动
+grub2-set-default 'CentOS Linux (4.4.207-1.el7.elrepo.x86_64) 7 (Core)'
+
+
+6，kube-proxy 开启ipvs前置条件
+ modprobe br_netfilter
+cat > /etc/sysconfig/modules/ipvs.modules <<EOF
+#!/bin/bash
+modprobe -- ip_vs
+modprobe -- ip_vs_rr
+modprobe -- ip_vs_wrr
+modprobe -- ip_vs_sh
+modprobe -- nf_conntrack_ipv4
+EOF
+
+chmod 755 /etc/sysconfig/modules/ipvs.modules && bash /etc/sysconfig/modules/ipvs.modules && lsmod | grep -e ip_vs -e nf_conntrack_ipv4
+
+
+7, 安装docker
+
+yum  install -y yum-utils device-mapper-persistent-data lvm2
+
+yum-config-manager \
+     --add-repo \
+     http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+
+yum update -y && yum install -y docker-ce
+
+//重新设置内核重启加载新的docker
+grub2-set-default 'CentOS Linux (4.4.189-e.el7.elrepo.x86_64) 7 (Core)' && reboot
+
+
+mkdir  /etc/docker
+
+cat > /etc/docker/daemon.json <<EOF
+{
+   "registry-mirrors":["https://pee6w651.mirror.aliyuncs.com"],
+   "exec-opts": ["native.cgroupdriver=systemd"],
+    "log-driver": "json-file",
+    "log-opts":{
+       "max-size": "100m"
+     }
+}
+EOF
+
+mkdir -p /etc/systemd/system/docker.service.d
+
+systemctl daemon-reload && systemctl restart docker && systemctl enable docker
+
+8, kubeadm 安装主从配置
+
+cat <<EOF> /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=http://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64
+enable=1
+gpgcheck=0
+repo_pgpcheck=0
+gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
+http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg
+EOF
+
+yum -y install kubeadm-1.15.1 kubectl-1.15.1 kubelet-1.15.1
+
+systemctl enable kubelet.service
+
+9, 导镜像从本地，编写导入脚本
+
+#!/bin/bash
+
+ls /root/kubeadm-basic.images > /tmp/image-list.txt
+
+for i in $( cat /tmp/image-list.txt  )
+do
+          docker load -i $i
+done
+
+rm -rf /tmp/image-list.txt
+
+10,初始化主节点
+
+kubeadm config print init-defaults > kubeadm-config.yaml
+
+------------------------------------------------------------------------
+
+apiVersion: kubeadm.k8s.io/v1beta2
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: abcdef.0123456789abcdef
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: 192.168.1.20
+  bindPort: 6443
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+  name: k8s-master01
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+---
+apiServer:
+  timeoutForControlPlane: 4m0s
+apiVersion: kubeadm.k8s.io/v1beta2
+certificatesDir: /etc/kubernetes/pki
+clusterName: kubernetes
+controllerManager: {}
+dns:
+  type: CoreDNS
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+imageRepository: k8s.gcr.io
+kind: ClusterConfiguration
+kubernetesVersion: v1.15.1
+networking:
+  dnsDomain: cluster.local
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: 10.96.0.0/12
+scheduler: {}
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+featureGates:
+  SupportIPVSProxyMode: true
+mode: ipvs
+
+
+---------------------------------------------------------------------
+启动节点
+ kubeadm init --config=kubeadm-config.yaml --experimental-upload-certs | tee kubeadm-init.log
+
+根据日志文件kubeadm-init.log 执行后面几个命令
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+----
+
+wget  https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml 
+
+创建flannel
+kubectl create -f kube-flannel.yml
+
+查看命令
+
+kubectl get pod -n kube-system 查看pod 的信息 并在kube-system命名空间里，默认default
+
+kubectl get node 查看节点状态
+
+去各个节点执行日志后的最后一行输出就能成功加入节点
+
+11，拖拉上传本地文件
+yum install -y lrzsz
+
+上传docker-compose文件
+mv docker-compose  /usr/local/bin/
+chmod a+x /usr/local/bin/docker-compose
+
+
+kubectl run nginx-deployment --image=hub.guigu.com/library/myapp:v1 --port=80 --replicas=1
+
+kubectl get deployment
+
+kubectl delete pod -n default
+
+扩容
+kubectl scale --replicas=2 deployment/nginx-deployment
+
+
+******ipvs 进行负载均衡target-port表示容器的端口被负载均衡开放出来
+
+ kubectl expose deployment nginx-deployment --port=30000 --target-port=80
+
+kubectl get svc 查看代理出来的网络
+
+curl 10.109.59.166:30000/hostname.html 进行测试轮询的方式 clusterIP的默认方式
+
+ipvsadm -Ln 查看网络映射
+
+改为nodePort网络方式  svc进行服务的负载均衡
+
+kubectl edit svc nginx-deployment
+
+[root@k8s-master01 ~]# netstat -antp |grep 30460
+tcp6       0      0 :::30460                :::*                    LISTEN      2890/kube-proxy     
+[root@k8s-master01 ~]# kubectl get  svc 
+NAME               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)           AGE
+kubernetes         ClusterIP   10.96.0.1       <none>        443/TCP           12h
+nginx-deployment   NodePort    10.109.59.166   <none>        30000:30460/TCP   8m43s
+[root@k8s-master01 ~]# netstat -antp |grep 30460
+tcp6       0      0 :::30460                :::*                    LISTEN      2890/kube-proxy     
+[root@k8s-master01 ~]# 
+
+----
+资源清单的编写与使用
+ apiVersion 版本号必须要有
+ kind 类型阔以定义Pod  Service ,,,,,,,查文档
+ metadata 元数据 
+ spec 特定模板，这个相当关键
+例如：
+
+apiVersion: v1
+kind: Pod
+metadata:
+   name: myapp-pod
+   labels:
+      app: myapp
+spc:
+   containers:
+   - name: app
+      images: hub.atguigu.com/library/myapp:v1
+   - name: test
+      images: hub.atguigu.com/library/myapp:v1
+
+-----------------------------------------------------
+这里定义的含义是一个Pod里面有两个容器，然而这两个容器共用一个网络栈，磁盘等，所以会起不来；然后看日志
+排查问题
+
+kubectl get pop 查看错误的pod 
+
+kubectl describe pod myapp-pod 查看pod 信息里那个容器出现了问题
+
+kubectl log myapp-pod -c test  查看日志，然后 -c 参数指定查看某一个容器
+
+------------------------------------------------------
+kubectl create  -f pod.yml 创建
+kubectl apply -f  pod.yml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
